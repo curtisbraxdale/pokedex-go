@@ -35,30 +35,34 @@ func main() {
 		command := cleanedInput[0]
 		switch command {
 		case "exit":
-			commandExit(&config, cache)
+			commandExit()
 		case "help":
-			commandHelp(&config, cache)
+			commandHelp()
 		case "map":
 			commandMap(&config, cache)
 		case "mapb":
 			commandMapb(&config, cache)
 		case "explore":
-			commandExplore(cleanedInput[1], &config, cache)
+			commandExplore(cleanedInput[1], cache)
 		case "catch":
-			commandCatch(cleanedInput[1], &config, cache)
+			commandCatch(cleanedInput[1], cache)
+		case "inspect":
+			commandInspect(cleanedInput[1])
+		case "pokedex":
+			commandPokedex()
 		default:
 			fmt.Printf("Unknown command: %v\n", command)
 		}
 	}
 }
 
-func commandExit(config *utils.UrlConfig, cache *pokecache.Cache) error {
+func commandExit() error {
 	fmt.Print("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(config *utils.UrlConfig, cache *pokecache.Cache) error {
+func commandHelp() error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Printf("Usage:\n\n")
 	fmt.Printf("help - Displays a help message\n")
@@ -66,6 +70,8 @@ func commandHelp(config *utils.UrlConfig, cache *pokecache.Cache) error {
 	fmt.Printf("mapb - Displays previous list of locations\n")
 	fmt.Printf("explore - Displays a list of pokemon at a given location\n")
 	fmt.Printf("catch - Attempt to catch a given pokemon\n")
+	fmt.Printf("inspect - Shows the pokedex entry of a caught pokemon\n")
+	fmt.Printf("pokedex - Displays a list of caught pokemon\n")
 	fmt.Printf("exit - Exits the pokedex\n")
 	return nil
 }
@@ -97,7 +103,7 @@ func commandMapb(config *utils.UrlConfig, cache *pokecache.Cache) error {
 	}
 }
 
-func commandExplore(location string, config *utils.UrlConfig, cache *pokecache.Cache) error {
+func commandExplore(location string, cache *pokecache.Cache) error {
 	pokemonList, err := utils.ExploreArea(location, cache)
 	if err != nil {
 		return err
@@ -108,7 +114,7 @@ func commandExplore(location string, config *utils.UrlConfig, cache *pokecache.C
 	return nil
 }
 
-func commandCatch(pokemon string, config *utils.UrlConfig, cache *pokecache.Cache) error {
+func commandCatch(pokemon string, cache *pokecache.Cache) error {
 	pokemonDetails, caught, err := utils.CatchPokemon(pokemon, cache)
 	if err != nil {
 		fmt.Printf("%s is not a pokemon...try again.\n", pokemon)
@@ -121,6 +127,37 @@ func commandCatch(pokemon string, config *utils.UrlConfig, cache *pokecache.Cach
 		fmt.Printf("Oh no! %s escaped!\n", pokemonDetails.Name)
 	}
 	return nil
+}
+
+func commandInspect(pokemon string) error {
+	pokemonDetails, err := utils.InspectPokemon(pokemon, &dex)
+	if err != nil {
+		fmt.Printf("%s is not in your pokedex...try again.\n", pokemon)
+		return err
+	}
+	fmt.Printf("Name: %v\n", pokemonDetails.Name)
+	fmt.Printf("Height: %v\n", pokemonDetails.Height)
+	fmt.Printf("Weight: %v\n", pokemonDetails.Weight)
+	fmt.Printf("Stats:\n")
+	fmt.Printf("	-hp: %v\n", utils.GetBaseStat(*pokemonDetails, "hp"))
+	fmt.Printf("	-attack: %v\n", utils.GetBaseStat(*pokemonDetails, "attack"))
+	fmt.Printf("	-defense: %v\n", utils.GetBaseStat(*pokemonDetails, "defense"))
+	fmt.Printf("	-special-attack: %v\n", utils.GetBaseStat(*pokemonDetails, "special-attack"))
+	fmt.Printf("	-special-defense: %v\n", utils.GetBaseStat(*pokemonDetails, "special-defense"))
+	fmt.Printf("	-speed: %v\n", utils.GetBaseStat(*pokemonDetails, "speed"))
+	fmt.Printf("Types:\n")
+	fmt.Printf("	-%v\n", utils.GetTypeNames(*pokemonDetails)[0])
+	if len(utils.GetTypeNames(*pokemonDetails)) > 1 {
+		fmt.Printf("	-%v\n", utils.GetTypeNames(*pokemonDetails)[1])
+	}
+	return nil
+}
+
+func commandPokedex() {
+	fmt.Printf("Your Pokedex:\n")
+	for _, value := range dex.Pokemon {
+		fmt.Printf("	-%v\n", value.Name)
+	}
 }
 
 func cleanInput(text string) []string {

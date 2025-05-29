@@ -428,3 +428,28 @@ func AddToDex(pokemon *Pokemon, pokedex *Pokedex) {
 	pokedex.Pokemon[pokemon.Name] = *pokemon
 	return
 }
+
+func InspectPokemon(pokemon string, pokedex *Pokedex) (*Pokemon, error) {
+	pokemonDetails, caught := pokedex.Pokemon[pokemon]
+	if caught {
+		return &pokemonDetails, nil
+	}
+	return nil, errors.New("Pokemon not in pokedex.")
+}
+
+func GetBaseStat(pokemon Pokemon, statName string) int {
+	for _, s := range pokemon.Stats {
+		if s.Stat.Name == statName {
+			return s.BaseStat
+		}
+	}
+	return 0
+}
+
+func GetTypeNames(pokemon Pokemon) []string {
+	var types []string
+	for _, t := range pokemon.Types {
+		types = append(types, t.Type.Name)
+	}
+	return types
+}
