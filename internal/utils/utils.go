@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"net/http"
 	"sync"
 
@@ -14,6 +16,10 @@ import (
 type UrlConfig struct {
 	Previous *string
 	Next     *string
+}
+
+type Pokedex struct {
+	Pokemon map[string]Pokemon
 }
 
 // LocationArea represents the structure of a single location area from PokeAPI.
@@ -73,6 +79,90 @@ type NamedAPIResourceList struct {
 	Next     *string            `json:"next"`     // Pointer to string as it can be null
 	Previous *string            `json:"previous"` // Pointer to string as it can be null
 	Results  []NamedAPIResource `json:"results"`
+}
+
+// Pokemon represents the main structure of a single Pokemon from PokeAPI.
+type Pokemon struct {
+	ID             int                `json:"id"`
+	Name           string             `json:"name"`
+	BaseExperience int                `json:"base_experience"`
+	Height         int                `json:"height"`
+	IsDefault      bool               `json:"is_default"`
+	Order          int                `json:"order"`
+	Weight         int                `json:"weight"`
+	Abilities      []PokemonAbility   `json:"abilities"`
+	Forms          []NamedAPIResource `json:"forms"`
+	GameIndices    []VersionGameIndex `json:"game_indices"`
+	HeldItems      []PokemonHeldItem  `json:"held_items"`
+	Moves          []PokemonMove      `json:"moves"`
+	Species        NamedAPIResource   `json:"species"`
+	Sprites        PokemonSprites     `json:"sprites"`
+	Stats          []PokemonStat      `json:"stats"`
+	Types          []PokemonType      `json:"types"`
+}
+
+// PokemonAbility represents an ability of a Pokemon.
+type PokemonAbility struct {
+	IsHidden bool             `json:"is_hidden"`
+	Slot     int              `json:"slot"`
+	Ability  NamedAPIResource `json:"ability"`
+}
+
+// VersionGameIndex represents a game index for a Pokemon.
+type VersionGameIndex struct {
+	GameIndex int              `json:"game_index"`
+	Version   NamedAPIResource `json:"version"`
+}
+
+// PokemonHeldItem represents an item held by a Pokemon.
+type PokemonHeldItem struct {
+	Item           NamedAPIResource         `json:"item"`
+	VersionDetails []PokemonHeldItemVersion `json:"version_details"`
+}
+
+// PokemonHeldItemVersion represents version details for a held item.
+type PokemonHeldItemVersion struct {
+	Version NamedAPIResource `json:"version"`
+	Rarity  int              `json:"rarity"`
+}
+
+// PokemonMove represents a move a Pokemon can learn.
+type PokemonMove struct {
+	Move                NamedAPIResource     `json:"move"`
+	VersionGroupDetails []PokemonMoveVersion `json:"version_group_details"`
+}
+
+// PokemonMoveVersion represents version details for a Pokemon move.
+type PokemonMoveVersion struct {
+	LevelLearnedAt  int              `json:"level_learned_at"`
+	MoveLearnMethod NamedAPIResource `json:"move_learn_method"`
+	VersionGroup    NamedAPIResource `json:"version_group"`
+}
+
+// PokemonSprites contains URLs for various sprites of a Pokemon.
+type PokemonSprites struct {
+	BackDefault      *string `json:"back_default"`
+	BackFemale       *string `json:"back_female"`
+	BackShiny        *string `json:"back_shiny"`
+	BackShinyFemale  *string `json:"back_shiny_female"`
+	FrontDefault     *string `json:"front_default"`
+	FrontFemale      *string `json:"front_female"`
+	FrontShiny       *string `json:"front_shiny"`
+	FrontShinyFemale *string `json:"front_shiny_female"`
+	// Add other sprite fields if needed, e.g., "other", "versions"
+}
+
+// PokemonStat represents a stat of a Pokemon.
+type PokemonStat struct {
+	BaseStat int              `json:"base_stat"`
+	Effort   int              `json:"effort"`
+	Stat     NamedAPIResource `json:"stat"`
+}
+
+// PokemonType represents a type of a Pokemon.
+type PokemonType struct {
+	Slot int              `json:"slot"`
+	Type NamedAPIResource `json:"type"`
 }
 
 func GetLocationAreas(config *UrlConfig, direction string, cache *pokecache.Cache) ([]LocationArea, error) {
@@ -264,4 +354,77 @@ func ExploreArea(location string, cache *pokecache.Cache) ([]PokemonEncounter, e
 	// Directly return the PokemonEncounters slice from the fetched LocationArea
 	fmt.Printf("Found %d pokemon encounters in the area.\n", len(locationAreaDetails.PokemonEncounters))
 	return locationAreaDetails.PokemonEncounters, nil
+}
+
+func CatchPokemon(pokemonName string, cache *pokecache.Cache) (*Pokemon, bool, error) {
+
+	apiURL := "https://pokeapi.co/api/v2/pokemon/" + pokemonName + "/"
+
+	var pokemon Pokemon
+	var err error
+	var body []byte
+
+	// --- Step 1: Fetch the Pokemon ---
+	// If URL is in Cache, skip Fetch
+	data, exists := cache.Get(apiURL)
+	if exists {
+		body = data
+	} else {
+		resp, httpErr := http.Get(apiURL)
+		if httpErr != nil {
+			return nil, false, fmt.Errorf("error making HTTP request for %s: %w", pokemonName, httpErr)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, false, fmt.Errorf("received non-OK HTTP status for %s: %s", pokemonName, resp.Status)
+		}
+
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, false, fmt.Errorf("error reading response body for %s: %w", pokemonName, err)
+		}
+		cache.Add(apiURL, body)
+	}
+
+	err = json.Unmarshal(body, &pokemon)
+	if err != nil {
+		fmt.Printf("Error unmarshaling list JSON: %v\n", err)
+		fmt.Printf("Response body: %s\n", string(body))
+		return nil, false, err
+	}
+
+	// --- Simple Catch Logic ---
+
+	// A simple catch rate: higher base_experience makes it harder to catch
+	// Let's say, catch if random number (0-100) is greater than base_experience / 2
+	catchDifficulty := catchChance(pokemon.BaseExperience, 635, 0.02, 5.0)
+	roll := rand.Intn(101) // Random number between 0 and 100
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemon.Name)
+	fmt.Printf("Catch difficulty for %s (Base Exp: %d): %d%%\n", pokemon.Name, pokemon.BaseExperience, catchDifficulty)
+	fmt.Printf("Your roll: %d\n", roll)
+
+	if roll > (100 - catchDifficulty) {
+		return &pokemon, true, nil
+	} else {
+		return &pokemon, false, nil
+	}
+}
+
+func catchChance(baseExp int, maxExp int, minChance float64, k float64) int {
+	// Convert inputs to float64 for math.Exp
+	normalizedExp := float64(baseExp) / float64(maxExp)
+	chance := minChance + (1-minChance)*math.Exp(-k*normalizedExp)
+
+	// Convert to integer percentage (0–100)
+	return int(math.Round(chance * 100))
+}
+
+func AddToDex(pokemon *Pokemon, pokedex *Pokedex) {
+	_, exists := pokedex.Pokemon[pokemon.Name]
+	if exists {
+		return
+	}
+	pokedex.Pokemon[pokemon.Name] = *pokemon
+	return
 }

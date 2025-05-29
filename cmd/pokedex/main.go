@@ -12,33 +12,11 @@ import (
 	"github.com/curtisbraxdale/pokedex-go/internal/utils"
 )
 
-var commands map[string]cliCommand
+var dex = utils.Pokedex{Pokemon: make(map[string]utils.Pokemon)}
 
 func main() {
 	interval := time.Hour
 	cache := pokecache.NewCache(interval)
-	commands = map[string]cliCommand{
-		"help": {
-			name:        "help",
-			description: "Displays a help message",
-			callback:    commandHelp,
-		},
-		"map": {
-			name:        "map",
-			description: "Displays a list of locations",
-			callback:    commandMap,
-		},
-		"mapb": {
-			name:        "mapb",
-			description: "Displays previous list of locations",
-			callback:    commandMapb,
-		},
-		"exit": {
-			name:        "exit",
-			description: "Exit the Pokedex",
-			callback:    commandExit,
-		},
-	}
 
 	//Initialize the config struct with the first url set
 	initialUrl := "https://pokeapi.co/api/v2/location-area/"
@@ -66,6 +44,8 @@ func main() {
 			commandMapb(&config, cache)
 		case "explore":
 			commandExplore(cleanedInput[1], &config, cache)
+		case "catch":
+			commandCatch(cleanedInput[1], &config, cache)
 		default:
 			fmt.Printf("Unknown command: %v\n", command)
 		}
@@ -81,9 +61,12 @@ func commandExit(config *utils.UrlConfig, cache *pokecache.Cache) error {
 func commandHelp(config *utils.UrlConfig, cache *pokecache.Cache) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Printf("Usage:\n\n")
-	for _, command := range commands {
-		fmt.Printf("%s - %s\n", command.name, command.description)
-	}
+	fmt.Printf("help - Displays a help message\n")
+	fmt.Printf("map - Displays a list of locations\n")
+	fmt.Printf("mapb - Displays previous list of locations\n")
+	fmt.Printf("explore - Displays a list of pokemon at a given location\n")
+	fmt.Printf("catch - Attempt to catch a given pokemon\n")
+	fmt.Printf("exit - Exits the pokedex\n")
 	return nil
 }
 
@@ -125,13 +108,22 @@ func commandExplore(location string, config *utils.UrlConfig, cache *pokecache.C
 	return nil
 }
 
+func commandCatch(pokemon string, config *utils.UrlConfig, cache *pokecache.Cache) error {
+	pokemonDetails, caught, err := utils.CatchPokemon(pokemon, cache)
+	if err != nil {
+		fmt.Printf("%s is not a pokemon...try again.\n", pokemon)
+		return err
+	}
+	if caught {
+		fmt.Printf("Congratulations! You caught %s!\n", pokemonDetails.Name)
+		utils.AddToDex(pokemonDetails, &dex)
+	} else {
+		fmt.Printf("Oh no! %s escaped!\n", pokemonDetails.Name)
+	}
+	return nil
+}
+
 func cleanInput(text string) []string {
 	loweredText := strings.ToLower(text)
 	return strings.Fields(loweredText)
-}
-
-type cliCommand struct {
-	name        string
-	description string
-	callback    func(*utils.UrlConfig, *pokecache.Cache) error
 }
