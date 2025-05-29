@@ -115,7 +115,13 @@ func commandMapb(config *utils.UrlConfig, cache *pokecache.Cache) error {
 }
 
 func commandExplore(location string, config *utils.UrlConfig, cache *pokecache.Cache) error {
-
+	pokemonList, err := utils.ExploreArea(location, cache)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(pokemonList); i++ {
+		fmt.Println(pokemonList[i].Pokemon.Name)
+	}
 	return nil
 }
 

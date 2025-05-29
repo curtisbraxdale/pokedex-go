@@ -222,16 +222,46 @@ func GetLocationAreas(config *UrlConfig, direction string, cache *pokecache.Cach
 	return allLocationAreas, nil
 }
 
-func ExploreArea(location string) ([]PokemonEncounter, error) {
+func ExploreArea(location string, cache *pokecache.Cache) ([]PokemonEncounter, error) {
 	apiURL := "https://pokeapi.co/api/v2/location-area/" + location + "/"
+	fmt.Printf("Exploring area: %s\n", location)
+
+	var locationAreaDetails LocationArea
+	var err error
+	var body []byte
+
+	// --- Step 1: Fetch the specific LocationArea details ---
+	// If URL is in Cache, skip Fetch
 	data, exists := cache.Get(apiURL)
-	var resourceList NamedAPIResourceList
 	if exists {
-		err := json.Unmarshal(data, &resourceList)
-		if err != nil {
-			fmt.Printf("Error unmarshaling list JSON: %v\n", err)
-			fmt.Printf("Response body: %s\n", string(data))
-			return nil, err
-		}
+		body = data
 	} else {
+		resp, httpErr := http.Get(apiURL)
+		if httpErr != nil {
+			return nil, fmt.Errorf("error making HTTP request for location area: %w", httpErr)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("received non-OK HTTP status for location area: %s", resp.Status)
+		}
+
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("error reading location area response body: %w", err)
+		}
+
+		cache.Add(apiURL, body)
+	}
+
+	// Unmarshal the body (either from cache or HTTP response) into the LocationArea struct
+	err = json.Unmarshal(body, &locationAreaDetails)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling location area JSON: %w\nResponse body: %s", err, string(body))
+	}
+	fmt.Printf("Successfully unmarshaled details for location area: %s (ID: %d)\n", locationAreaDetails.Name, locationAreaDetails.ID)
+
+	// Directly return the PokemonEncounters slice from the fetched LocationArea
+	fmt.Printf("Found %d pokemon encounters in the area.\n", len(locationAreaDetails.PokemonEncounters))
+	return locationAreaDetails.PokemonEncounters, nil
 }
